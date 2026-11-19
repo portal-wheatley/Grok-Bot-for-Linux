@@ -1,6 +1,6 @@
 {
-  "version": "0.79.4",
-  "url": "https://downloads.cursor.com/grokbot/stable/win32-x64/0.79.4/Grok_Bot_0.79.4_Setup.exe",
-  "hash": "sha256-Tp+aiHaORSMgk7F566HmoXgPitofhKGgEq4Nnwd3NgU=",
-  "electron": "42"
+  "version": "1.2.3",
+  "url": "https://downloads.cursor.com/grokbot/stable/win32-x64/1.2.3/Grok_Bot_1.2.3_Setup.exe",
+  "hash": "sha256-hbno0Que3pIbMVu1obUtt+DzQ40WKqzt/DiMd4IXdls=",
+  "electron": "43"
 }

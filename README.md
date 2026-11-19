@@ -45,7 +45,8 @@ then allow it:
 nixpkgs.overlays = [ inputs.grok-bot.overlays.default ];
 nixpkgs.config = {
   allowUnfreePredicate = pkg: lib.getName pkg == "grok-bot";
-  permittedInsecurePackages = [ "electron-42.11.18" ]; # whatever version your nixpkgs has
+  # Only if your nixpkgs marks the Electron version in sources.json as end of life:
+  # permittedInsecurePackages = [ "electron-<version>" ];
 };
 environment.systemPackages = [ pkgs.grok-bot ];
 ```
@@ -56,10 +57,11 @@ Installing through either route adds a desktop entry and registers the
 ### Why "unfree" and "insecure"
 
 - **Unfree:** Grok Bot is proprietary. The package is marked that way.
-- **Insecure:** Grok Bot 0.79.4 is built for Electron 42. nixpkgs marks
-  Electron 42 as end of life. The official Windows and macOS apps ship that
-  same Electron, so this is no worse than upstream. The flake allows only
-  that one Electron major, nothing else.
+- **Insecure (sometimes):** the package uses the Electron major upstream
+  builds for (`electron` in `sources.json`). nixpkgs marks older majors as
+  end of life. The official Windows and macOS apps ship that same Electron,
+  so this is no worse than upstream. The flake allows only that one Electron
+  major, nothing else.
 
 ## How it works
 
@@ -70,7 +72,7 @@ Installing through either route adds a desktop entry and registers the
 3. Delete every Windows native addon (`.node`, `.exe`, `.dll`).
 4. Rebuild the two addons the app cannot run without, `tree-sitter` and
    `tree-sitter-bash`, from their npm sources. They are open source.
-5. Put the app next to the matching Electron from nixpkgs (`electron_42-bin`).
+5. Put the app next to the matching Electron from nixpkgs (`electron_<major>-bin`).
    The Electron binary is copied under the name `grok-bot`, so Electron
    treats the app as an installed app, not a development run.
 6. Wrap it with `xdg-open` on the PATH (for sign-in) and the usual Wayland
