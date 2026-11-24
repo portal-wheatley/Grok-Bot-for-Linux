@@ -445,6 +445,7 @@ def run(args):
     tripped_at = None
     exited_at = None
     stopping = False
+    gb_cg_reported = drm_reported = False
     tick = 0
 
     while True:
@@ -453,6 +454,13 @@ def run(args):
         if gb_cg is None or not (gb_cg / "cgroup.procs").exists():
             cg = cgroup_of(child.pid)
             gb_cg = cg if cg is not None and cg.name.endswith(".scope") and unit in cg.name else None
+            if gb_cg is not None and not gb_cg_reported:
+                gb_cg_reported = True
+                has_stat = (gb_cg / "memory.stat").exists()
+                events.add("INFO", f"Grok Bot cgroup {gb_cg} memory.stat={'yes' if has_stat else 'missing'}")
+            elif gb_cg is None and tick == 5 and not gb_cg_reported and child.poll() is None:
+                gb_cg_reported = True
+                events.add("INFO", f"Grok Bot cgroup not found; launcher pid {child.pid} is in {cg}")
         if gs_pid is None or not Path(f"/proc/{gs_pid}").exists():
             gs_pid = find_gnome_shell()
             if gs_pid:
@@ -482,8 +490,17 @@ def run(args):
                 wayland.write(f"{clock()}\t{key}\t{n}\n")
             window.clear()
         if tick % 5 == 0 and gs_pid:
-            for key, value in sorted(drm_usage(gs_pid).items()):
+            usage = drm_usage(gs_pid)
+            for key, value in sorted(usage.items()):
                 drm.write(f"{clock()}\t{key}\t{round(value / MB)}\n")
+            if not usage and not drm_reported:
+                drm_reported = True
+                try:
+                    os.listdir(f"/proc/{gs_pid}/fdinfo")
+                    why = "readable, but no drm memory keys"
+                except OSError as error:
+                    why = f"unreadable ({error.strerror})"
+                events.add("INFO", f"GNOME Shell fdinfo {why}; no GPU memory figures")
 
         watched = gs_cg_shmem if gs_cg_shmem is not None else mem.get("Shmem", 0)
         rises.append(watched)
@@ -559,7 +576,7 @@ def build_report(out):
 
     lines.append("## Run")
     for event in events:
-        if event.split(" ", 2)[1:2] and event.split(" ", 2)[1] in ("START", "INFO", "TRIP", "KILL", "EXIT", "STOP", "END"):
+        if event.split(" ", 2)[1:2] and event.split(" ", 2)[1] in ("START", "INFO", "TRIP", "SNAPSHOT", "KILL", "EXIT", "STOP", "END"):
             lines.append(f"- `{event}`")
     if not any(" END" in e for e in events):
         lines.append("- run did not finish cleanly (session crash or harness killed)")
@@ -612,7 +629,7 @@ def build_report(out):
                              if num(r, key) is not None]
             start_index = max(j for v, j in window_values if v == min(window_values)[0])
         elif not rising and start_index is not None:
-            bursts.append((start_index, i))
+            bursts.append((start_index, i - 1))  # row i is no longer rising
             start_index = None
     if start_index is not None:
         bursts.append((start_index, len(rows) - 1))
@@ -620,16 +637,22 @@ def build_report(out):
     if not bursts:
         lines.append("None.")
     else:
-        lines.append("| start | end | from MB | to MB | locked | power_save | commits/s in burst | commits/s before |")
-        lines.append("|---|---|---|---|---|---|---|---|")
+        lines.append("| start | end | from MB | to MB | 1 min later MB | locked | power_save | commits/s in burst | commits/s before |")
+        lines.append("|---|---|---|---|---|---|---|---|---|")
         for a, b in bursts[:15]:
             seg, before = rows[a: b + 1], rows[max(0, a - 30): a]
             def avg(part, field):
                 values = [v for v in (num(r, field) for r in part) if v is not None]
                 return f"{statistics.mean(values):.1f}" if values else "-"
             values = [num(r, key) for r in seg if num(r, key) is not None]
+            end_s = to_seconds(rows[b]["time"])
+            later = [num(r, key) for r in rows[b:]
+                     if to_seconds(r["time"]) - end_s >= 60 and num(r, key) is not None]
+            start_v = num(rows[a], key)
             lines.append(
-                f"| {rows[a]['time']} | {rows[b]['time']} | {round(min(values))} | {round(max(values))} | "
+                f"| {rows[a]['time']} | {rows[b]['time']} | "
+                f"{round(start_v if start_v is not None else min(values))} | {round(max(values))} | "
+                f"{round(later[0]) if later else '-'} | "
                 f"{rows[a].get('locked') or '?'} | {rows[a].get('power_save') or '?'} | "
                 f"{avg(seg, 'wl_commits')} | {avg(before, 'wl_commits')} |")
     lines.append("")
@@ -684,7 +707,7 @@ def build_report(out):
 
     journal = read(out / "journal.log").splitlines()
     notable = [l for l in journal if re.search(
-        r"oom|out of memory|killed process|SEGV|segfault|dumped|BO creation|VM_BIND|flip_done|commit wait",
+        r"oom|out of memory|killed process|terminated abnormally|SEGV|segfault|dumped|BO creation|VM_BIND|flip_done|commit wait",
         l, re.IGNORECASE)]
     lines.append("## Notable journal lines")
     lines.extend(f"    {l[:220]}" for l in notable[-25:]) if notable else lines.append("None.")

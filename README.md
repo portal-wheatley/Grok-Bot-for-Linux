@@ -104,8 +104,8 @@ missing, the app turns that feature off and carries on. On Linux that means:
 ## Known issue: GNOME Shell memory bursts
 
 On an M2 MacBook Air (Asahi Linux, GNOME 50), GNOME Shell sometimes grabs
-memory very fast (about 500 MB a second) while Grok Bot is running, often
-with the screen locked. The kernel then kills apps, and sometimes GNOME
+memory very fast (up to about 600 MB a second) while Grok Bot is running,
+both with the screen locked and while in use. The kernel then kills apps, and sometimes GNOME
 Shell itself crashes and ends the session. The memory is counted against
 GNOME Shell, not Grok Bot, and it does not happen with Grok Bot closed.
 Grok Bot redraws its window about 40 times a second even when idle, so
