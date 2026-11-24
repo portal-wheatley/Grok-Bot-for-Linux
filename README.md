@@ -101,6 +101,37 @@ missing, the app turns that feature off and carries on. On Linux that means:
 | Process usage metrics (`cursor-proclist`) | Off on purpose: it only reports your process list to Cursor |
 | In-app auto-update | Off. Update this flake instead |
 
+## Known issue: GNOME Shell memory bursts
+
+On an M2 MacBook Air (Asahi Linux, GNOME 50), GNOME Shell sometimes grabs
+memory very fast (about 500 MB a second) while Grok Bot is running, often
+with the screen locked. The kernel then kills apps, and sometimes GNOME
+Shell itself crashes and ends the session. The memory is counted against
+GNOME Shell, not Grok Bot, and it does not happen with Grok Bot closed.
+Grok Bot redraws its window about 40 times a second even when idle, so
+the current guess is that GNOME Shell keeps frames it never shows.
+
+To help track it down, run Grok Bot under the harness:
+
+```bash
+pkill grok-bot   # a second copy would just hand off to the running one
+nix run github:portal-wheatley/Grok-Bot-for-Linux#harness
+```
+
+It runs Grok Bot and, every second, records memory (system, GNOME Shell,
+Grok Bot), whether the screen is locked or the displays are off, and how
+many Wayland messages Grok Bot sends. When GNOME Shell's memory rises by
+2 GB within 10 seconds, or free memory drops below 2 GB, it saves a
+snapshot, stops Grok Bot so the desktop survives, and keeps measuring
+for 90 seconds to see if GNOME Shell lets the memory go.
+
+Each run writes to `~/grok-bot-harness/<date-time>/` and ends with a short
+`report.md`. If the session crashes anyway, log back in and rebuild the
+report with `... #harness -- --report ~/grok-bot-harness/<date-time>`.
+Arguments after a second `--` go to Grok Bot, for example
+`nix run ...#harness -- -- --ozone-platform=x11`. See `--help` for the
+thresholds.
+
 ## Updating
 
 ```bash
@@ -119,9 +150,9 @@ writes its version, download URL, hash and Electron major to
   Sign in button opens the browser through `xdg-open`, a second launch with
   a `grokbot://` link hands it to the running window, and both tree-sitter
   addons load and parse inside Electron's runtime. Not yet used signed in.
-- **aarch64:** the flake evaluates, and the tree-sitter addons cross-compile
-  to aarch64. Apart from those two small addons, an aarch64 build only
-  downloads and repackages. Not yet run on real aarch64 hardware.
+- **aarch64:** used day to day on an M2 MacBook Air with Asahi Linux and
+  GNOME, apart from the known issue above. Only the two tree-sitter addons
+  are compiled; everything else is downloaded and repackaged.
 
 ## Credits
 

@@ -44,11 +44,25 @@
       packages = lib.genAttrs systems (
         system:
         let
-          grok-bot = grokBotFor (pkgsFor system);
+          pkgs = pkgsFor system;
+          grok-bot = grokBotFor pkgs;
         in
         {
           inherit grok-bot;
           default = grok-bot;
+
+          # Runs Grok Bot under a memory watchdog and records metrics; see
+          # harness/grok-bot-harness.py.
+          harness = pkgs.writeShellApplication {
+            name = "grok-bot-harness";
+            runtimeInputs = [
+              pkgs.python3
+              pkgs.glib # gdbus, for the lock and display state
+            ];
+            text = ''
+              exec python3 ${./harness/grok-bot-harness.py} --grok-bot ${lib.getExe grok-bot} "$@"
+            '';
+          };
         }
       );
 
@@ -56,6 +70,10 @@
         default = {
           type = "app";
           program = lib.getExe self.packages.${system}.default;
+        };
+        harness = {
+          type = "app";
+          program = lib.getExe self.packages.${system}.harness;
         };
       });
 
